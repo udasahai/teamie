@@ -7,5 +7,20 @@ var pool = mysql.createPool({
   database: 'teamie'
 });
 
+const db = {
 
-module.exports = pool;
+  query(sql, args) {
+    console.log("Executing Query : " + mysql.format(sql, args));
+    return new Promise((resolve, reject) => {
+      pool.query(sql, args, (err, result) => {
+        if (err)
+          return reject(err);
+        resolve(result);
+      });
+    });
+  }
+
+}
+
+
+module.exports = db;
