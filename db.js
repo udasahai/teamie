@@ -10,7 +10,7 @@ var pool = mysql.createPool({
 const db = {
 
   query(sql, args) {
-    console.log("Executing Query : " + mysql.format(sql, args));
+    // console.log("Executing Query : " + mysql.format(sql, args));
     return new Promise((resolve, reject) => {
       pool.query(sql, args, (err, result) => {
         if (err)
