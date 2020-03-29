@@ -34,19 +34,6 @@ router.get('/', (req, res, next) => {
 router.post('/', function(req, res, next) {
 
 
-    // let firstQuery = new Promise((resolve, reject) => {
-
-    //     pool.query(
-    //         'INSERT INTO track SET ?', post,
-    //         function(error, results, fields) {
-    //             if (error) {
-    //                 reject(error);
-    //             }
-    //             else
-    //                 resolve(results);
-    //         });
-    // });
-
     async function insertNewPing() {
 
         var datum = {
@@ -93,7 +80,8 @@ router.post('/', function(req, res, next) {
 
     const getPreviousPing = async(insertId) => {
 
-        const query_string = "SELECT * FROM track where user_id=? and id!= ORDER BY DESC LIMIT 1?" //Get the previous ping, exlude the currently inserted one. 
+        //console.log(insertId)
+        const query_string = "SELECT * FROM track where user_id=? and id!=? ORDER BY id DESC LIMIT 1" //Get the previous ping, exlude the currently inserted one. 
         const args = [req.body.user_id, insertId];
 
         let result = await db.query(query_string, args);
@@ -111,7 +99,7 @@ router.post('/', function(req, res, next) {
         let result = props.result;
         let insertId = props.insertId;
 
-        console.log(result)
+        //console.log(result)
 
         if (result.length == 0)
             return false;
@@ -122,12 +110,13 @@ router.post('/', function(req, res, next) {
         if (time_bw_pings > timeout)
             return false;
 
-        return await Promise.All(fillCumalativeTables(props));
+
+        return await Promise.all([fillUserTypeTotal(props), fillUserGroupEntityTotal(props), fillUserGroupTypeTotal(props)])
 
     }
 
 
-    const fillCumalativeTables = async(props) => {
+    const fillUserTypeTotal = async(props) => {
 
         let result = props.result;
         let insertId = props.insertId;
@@ -139,19 +128,60 @@ router.post('/', function(req, res, next) {
         //See if we can fill table 2 by comparing the site_id, user_id and tracking_type fields
         if (req.body.user_id == result[0].user_id && req.body.site_id == result[0].site_id && req.body.tracking_type == result[0].tracking_type) {
 
+            // //console.log("same tracking type")
             let query_string = `SELECT total_time FROM user_type_total
-                                    WHERE site_id = ? and user_id = ? and tracking_type = ?)`
+                                    WHERE site_id = ? and user_id = ? and tracking_type = ?`
             let args = [req.body.site_id, req.body.user_id, req.body.tracking_type]
+            // //console.log(mysql.format(query_string, args))
             let res = await db.query(query_string, args);
+            let prev_time = 0;
 
-            if (res.length == 0)
-                return false;
+            if (res.length > 0)
+                prev_time = res[0].total_time;
 
-            let total_time = res[0].total_time + time_bw_pings;
+            // //console.log("Prev entry exists")
 
-            query_string = `UPDATE user_type_total SET ? WHERE site_id = ? and user_id = ? and tracking_type = ?`;
-            args = [{ last_track_id: insertId, total_time: total_time },
-                req.body.site_id, req.body.user_id, req.body.tracking_type
+            let total_time = prev_time + time_bw_pings;
+
+            query_string = `INSERT INTO user_type_total VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE ?`;
+            args = [req.body.site_id, req.body.user_id, req.body.tracking_type, total_time, insertId, { last_track_id: insertId, total_time: total_time }]
+            return await db.query(query_string, args);
+        }
+
+        return false;
+    }
+
+    const fillUserGroupEntityTotal = async(props) => {
+
+        let result = props.result;
+        let insertId = props.insertId;
+
+        let prev_timestamp = parseInt(result[0].timestamp); //get the timestamp of the previous ping
+        let time_bw_pings = parseInt(req.body.timestamp) - prev_timestamp //time between this ping and prev ping. 
+
+
+        //See if we can fill table 2 by comparing the site_id, user_id and tracking_type fields
+        if (req.body.user_id == result[0].user_id && req.body.site_id == result[0].site_id && req.body.entity_type == result[0].entity_type &&
+            req.body.entity_id == result[0].entity_id && req.body.group_id == result[0].group_id) {
+
+            //console.log("same tracking type")
+            let query_string = `SELECT total_time FROM user_group_entity_total
+                                    WHERE site_id = ? and user_id = ? and group_id = ? and entity_type = ? and entity_id = ?`
+            let args = [req.body.site_id, req.body.user_id, req.body.group_id, req.body.entity_type, req.body.entity_id]
+            //console.log(mysql.format(query_string, args))
+            let res = await db.query(query_string, args);
+            let prev_time = 0;
+
+            if (res.length > 0)
+                prev_time = res[0].total_time;
+
+            //console.log("Prev entry exists")
+
+            let total_time = prev_time + time_bw_pings;
+
+            query_string = `INSERT INTO user_group_entity_total VALUES(?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE ?`;
+            args = [req.body.site_id, req.body.user_id, req.body.group_id, req.body.entity_type, req.body.entity_id,
+                total_time, insertId, 0, { last_track_id: insertId, total_time: total_time }
             ]
             return await db.query(query_string, args);
         }
@@ -159,138 +189,58 @@ router.post('/', function(req, res, next) {
         return false;
     }
 
-    async function second(insertId) {
-        let query_string = `SELECT track.id, user_type_total.total_time FROM track, user_type_total
-             WHERE (track.id ,user_type_total.total_time) = (
-                 SELECT last_track_id, total_time FROM user_type_total
-                 WHERE site_id = ? and user_id = ? and tracking_type = ?)`;
+    const fillUserGroupTypeTotal = async(props) => {
 
-        let args = [req.body.site_id, req.body.user_id, req.body.tracking_type];
+        let result = props.result;
+        let insertId = props.insertId;
 
-        // console.log(mysql.format(query_string, args))
-
-        let result = await db.query(
-            query_string, args
-        )
-
-        if (result.length == 0) { //This means that we have an entry in the user_type total table for this site_id, user_id and tracking_type
-            await db.query(`INSERT INTO user_type_total SET ?`, {
-                site_id: req.body.site_id,
-                user_id: req.body.user_id,
-                tracking_type: req.body.tracking_type,
-                total_time: 0,
-                last_track_id: insertId
-            })
-
-            return true;
-
-        }
-        else {
-
-            var last_track_id = result[0].id;
-            var total_time = result[0].total_time;
-
-            result = await db.query(
-                `SELECT timestamp FROM track 
-             WHERE id = ?`, [last_track_id]
-            );
-
-            let prev_timestamp = parseInt(result[0].timestamp);
-            // console.log("Prev timestamp " + prev_timestamp);
-
-            let time_bw_pings = parseInt(req.body.timestamp) - prev_timestamp
-            // console.log("time between pings " + time_bw_pings);
-
-            let update_query = `UPDATE user_type_total SET ? WHERE site_id = ? and user_id = ? and tracking_type = ?`
+        let prev_timestamp = parseInt(result[0].timestamp); //get the timestamp of the previous ping
+        let time_bw_pings = parseInt(req.body.timestamp) - prev_timestamp //time between this ping and prev ping. 
 
 
-            if (time_bw_pings > timeout) {
-                let args = [{ last_track_id: insertId },
-                    req.body.site_id, req.body.user_id, req.body.tracking_type
-                ]
-                return await db.query(update_query, args)
-            }
-            else {
-                let new_total_time = total_time + time_bw_pings
-                let args = [{ last_track_id: insertId, total_time: new_total_time },
-                    req.body.site_id, req.body.user_id, req.body.tracking_type
-                ]
-                return await db.query(update_query, args)
-            }
+        //See if we can fill table 2 by comparing the site_id, user_id and tracking_type fields
+        if (req.body.user_id == result[0].user_id && req.body.site_id == result[0].site_id && req.body.tracking_type == result[0].tracking_type) {
 
+            //console.log("same tracking type")
+            let query_string = `SELECT total_time FROM user_group_type_total
+                                    WHERE site_id = ? and user_id = ? and group_id = ? and tracking_type = ?`
+            let args = [req.body.site_id, req.body.user_id, req.body.group_id, req.body.tracking_type]
+            //console.log(mysql.format(query_string, args))
+            let res = await db.query(query_string, args);
+            let prev_time = 0;
+
+            if (res.length > 0)
+                prev_time = res[0].total_time;
+
+            //console.log("Prev entry exists")
+
+            let total_time = prev_time + time_bw_pings;
+
+            query_string = `INSERT INTO user_group_type_total VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE ?`;
+            args = [req.body.site_id, req.body.user_id, req.body.group_id, req.body.tracking_type, total_time, insertId, { last_track_id: insertId, total_time: total_time }]
+            return await db.query(query_string, args);
         }
 
-
+        return false;
     }
 
-    // insertNewPing().then((insertId) => second(insertId)).catch(e => console.error(e));
 
-    let previous_ping = insertNewPing().then(insertId => getPreviousPing(insertId)).then(props => fillCumalativeTablesParallel(props)).catch(e => console.error(e));
-
-    // var last_track_id_rows;
-
-    // let secondQuery = db.query('SELECT last_track_id FROM user_type_total WHERE \
-    //       site_id = ? AND user_id = ? AND tracking_type = ?', [req.body.site_id, req.body.user_id,
-    //     req.body.tracking_type
-    // ]).then((rows) => {
-    //     last_track_id_rows = rows;
-    //     if (rows.length > 0) {
-    //         return db.query('INSERT INTO user_type_total values \
-    //             (?,?,?,?,?)',[req.body.site_id, req.body.user_id,
-    //             req.body.tracking_type, 0, req.body.id]);
-    //     }
-    //     else {
-    //         return false;
-    //     }
-    // }).then(() => {
-    //     // if(entry_exists)
-    // })
+    insertNewPing().then(insertId => getPreviousPing(insertId)).then(props => fillCumalativeTablesParallel(props))
+        .then(() => {
+            res.status(200);
+            res.json({ status: "ok" })
+        })
+        .catch(e => {
+            console.error(e)
+            res.status(500);
+            res.json({
+                status: "failed",
+                error: e
+            })
+        });
 
 
 
-
-    // let secondQuery = new Promise((resolve, reject) => {
-
-    // var query_string = mysql.format('SELECT last_track_id FROM user_type_total WHERE \
-    //   site_id = ? AND user_id = ? AND tracking_type = ?', [req.body.site_id, req.body.user_id,
-    //     req.body.tracking_type
-    // ]);
-
-    //     console.log(query_string);
-
-    //     pool.query(
-    //         query_string,
-    //         function(error, results, fields) {
-    //             if (error) {
-    //                 reject(error)
-    //             }
-    //             else {
-    //                 console.log(results)
-    //                 resolve(results);
-    //             }
-    //         }
-
-
-    //     )
-    // });
-
-    // let second_follow = secondQuery.then((results) => {
-    //     var query_string = mysql.format('SELECT')
-    //     if (results.length <= 0) {
-    //         pool.query()
-    //     }
-    // });
-
-
-    // Promise.all([firstQuery])
-    //     .then((results) => {
-    res.status(200);
-    res.json({ status: "ok" })
-    //     })
-    //     .catch((err) => {
-    //         res.status(400);
-    //         res.json({ status: 'fail' })
-    //     });
 
 
 });

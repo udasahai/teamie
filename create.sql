@@ -1,4 +1,6 @@
 DROP TABLE IF EXISTS user_type_total;
+DROP TABLE IF EXISTS user_group_entity_total;
+DROP TABLE IF EXISTS user_group_type_total;
 DROP TABLE IF EXISTS track;
 
 CREATE TABLE IF NOT EXISTS track (
@@ -32,6 +34,34 @@ CREATE TABLE IF NOT EXISTS user_type_total (
     PRIMARY KEY(user_id, site_id, tracking_type), 
     FOREIGN KEY(last_track_id) REFERENCES track(id)
 );
+
+
+CREATE TABLE IF NOT EXISTS user_group_entity_total (
+    site_id varchar(50) NOT NULL,
+    user_id int NOT NULL, 
+    group_id int NOT NULL,
+    entity_type varchar(50) NOT NULL,
+    entity_id int NOT NULL,
+    total_time int DEFAULT 0, 
+    last_track_id int,
+    removed boolean,
+    PRIMARY KEY(user_id, group_id, site_id, entity_id, entity_type), 
+    FOREIGN KEY(last_track_id) REFERENCES track(id)
+);
+
+CREATE TABLE IF NOT EXISTS user_group_type_total (
+    site_id varchar(50) NOT NULL,
+    user_id int NOT NULL, 
+    group_id int NOT NULL,
+    tracking_type varchar(50) NOT NULL, 
+    total_time int DEFAULT 0, 
+    last_track_id int,
+    PRIMARY KEY(user_id, site_id,group_id,tracking_type), 
+    FOREIGN KEY(last_track_id) REFERENCES track(id)
+);
+
+
+
 
 
 
