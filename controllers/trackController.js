@@ -50,7 +50,7 @@ const insertNewPing = async(request) => {
 }
 
 
-const getPreviousPing = async(insertId) => {
+const getresult = async(insertId) => {
 
     ////console.log(insertId)
     const query_string = "SELECT * FROM track where user_id=? and id!=? ORDER BY id DESC LIMIT 1" //Get the previous ping, exlude the currently inserted one. 
@@ -93,34 +93,35 @@ const fillUserTypeTotal = async(props) => {
     let result = props.result;
     let insertId = props.insertId;
 
-    let prev_timestamp = parseInt(result[0].timestamp); //get the timestamp of the previous ping
+    let previousPing = result[0];
+
+    let prev_timestamp = parseInt(previousPing.timestamp); //get the timestamp of the previous ping
     let time_bw_pings = parseInt(req.body.timestamp) - prev_timestamp //time between this ping and prev ping. 
 
 
     //See if we can fill table 2 by comparing the site_id, user_id and tracking_type fields
-    if (req.body.user_id == result[0].user_id && req.body.site_id == result[0].site_id && req.body.tracking_type == result[0].tracking_type) {
+    // if (req.body.user_id == result[0].user_id && req.body.site_id == result[0].site_id && req.body.tracking_type == result[0].tracking_type) {
 
-        // ////console.log("same tracking type")
-        let query_string = `SELECT total_time FROM user_type_total
+    // ////console.log("same tracking type")
+    let query_string = `SELECT total_time FROM user_type_total
                                     WHERE site_id = ? and user_id = ? and tracking_type = ?`
-        let args = [req.body.site_id, req.body.user_id, req.body.tracking_type]
-        // ////console.log(mysql.format(query_string, args))
-        let res = await db.query(query_string, args);
-        let prev_time = 0;
+    let args = [previousPing.site_id, previousPing.user_id, previousPing.tracking_type]
+    // ////console.log(mysql.format(query_string, args))
+    let res = await db.query(query_string, args);
+    let prev_time = 0;
 
-        if (res.length > 0)
-            prev_time = res[0].total_time;
+    if (res.length > 0)
+        prev_time = res[0].total_time;
 
-        // ////console.log("Prev entry exists")
+    // ////console.log("Prev entry exists")
 
-        let total_time = prev_time + time_bw_pings;
+    let total_time = prev_time + time_bw_pings;
 
-        query_string = `INSERT INTO user_type_total VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE ?`;
-        args = [req.body.site_id, req.body.user_id, req.body.tracking_type, total_time, insertId, { last_track_id: insertId, total_time: total_time }]
-        return await db.query(query_string, args);
-    }
+    query_string = `INSERT INTO user_type_total VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE ?`;
+    args = [previousPing.site_id, previousPing.user_id, previousPing.tracking_type, total_time, insertId, { last_track_id: insertId, total_time: total_time }]
+    return await db.query(query_string, args);
+    // }
 
-    return false;
 }
 
 const fillUserGroupEntityTotal = async(props) => {
@@ -198,7 +199,7 @@ const fillUserGroupTypeTotal = async(props) => {
 
 const func = {
     insertNewPing: insertNewPing,
-    getPreviousPing: getPreviousPing,
+    getresult: getresult,
     fillCumalativeTablesParallel: fillCumalativeTablesParallel
 }
 
