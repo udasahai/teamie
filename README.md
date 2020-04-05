@@ -138,7 +138,10 @@
 		* **Sample Call:**
 
 		  `curl -XGET '64.227.17.164:3000/track?table=track'`	
+		  
 		  `curl -XGET '64.227.17.164:3000/track?table=user_type_total'`	
+		  
 		  `curl -XGET '64.227.17.164:3000/track?table=user_group_entity_total'`	
+		  
 		  `curl -XGET '64.227.17.164:3000/track?table=user_group_type_total'`	
 
