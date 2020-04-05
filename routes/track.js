@@ -24,9 +24,10 @@ router.get('/', (req, res, next) => {
             rows: result
         })
     }).catch(e => {
-        res.status(400);
+        res.status(404);
         res.send({
-            status: "fail"
+            status: "fail",
+            error: e
         })
     })
 
